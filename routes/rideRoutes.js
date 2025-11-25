@@ -7,12 +7,14 @@ const {
   updateRide,
   deleteRide,
   listAll,
+  getAllRides,
 } = require("../controllers/rideController");
 const { authenticate, authorizeRoles } = require("../middleware/auth");
 
 const router = express.Router();
 
 router.get("/admin/all", authenticate, authorizeRoles("admin"), listAll);
+router.get("/all", authenticate, getAllRides); // For riders to see all rides
 router.get("/mine", authenticate, getMyRides);
 router.get("/", getRealTimeRides);
 router.get("/:id", getRideById);

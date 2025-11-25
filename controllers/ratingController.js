@@ -13,6 +13,12 @@ exports.rateUser = asyncHandler(async (req, res) => {
     throw createError(400, "Missing required fields");
   }
 
+  // Check if user account is active
+  const user = await User.findById(req.user.id);
+  if (!user || !user.isActive) {
+    throw createError(403, "Account deactivated. You cannot rate users.");
+  }
+
   if (req.user.id === toUserId) {
     throw createError(400, "You cannot rate yourself");
   }

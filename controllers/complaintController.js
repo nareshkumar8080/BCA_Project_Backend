@@ -14,6 +14,12 @@ exports.addComplaint = asyncHandler(async (req, res) => {
     throw createError(400, "Ride and message are required");
   }
 
+  // Check if user account is active
+  const user = await User.findById(req.user.id);
+  if (!user || !user.isActive) {
+    throw createError(403, "Account deactivated. You cannot file complaints.");
+  }
+
   const ride = await Ride.findById(rideId).populate("riderId", "name email");
   if (!ride) {
     throw createError(404, "Ride not found");

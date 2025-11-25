@@ -11,11 +11,25 @@ exports.confirmBooking = asyncHandler(async (req, res) => {
   const { rideId, bookingMessage } = req.body;
   const userId = req.user.id;
 
+  // Check if user account is active
+  const passenger = await User.findById(userId).select("name email phone isActive role");
+  if (!passenger || !passenger.isActive) {
+    throw createError(403, "Account deactivated. You cannot book rides.");
+  }
+
+  // Riders cannot book rides, only customers can
+  if (passenger.role === "rider") {
+    throw createError(403, "Riders cannot book rides. Only customers can book rides.");
+  }
+
   const ride = await Ride.findById(rideId).populate("riderId");
   if (!ride) throw createError(404, "Ride not found");
   if (ride.status !== "active") throw createError(400, "Ride already booked");
 
-  const passenger = await User.findById(userId).select("name email phone");
+  // Check if rider account is active
+  if (!ride.riderId || !ride.riderId.isActive) {
+    throw createError(403, "This ride is no longer available. The rider account has been deactivated.");
+  }
 
   let booking = await Booking.findOne({ rideId, userId });
   if (booking && booking.status === "confirmed") {
@@ -127,6 +141,12 @@ exports.markCompleted = asyncHandler(async (req, res) => {
   const isPassenger = booking.userId.toString() === req.user.id;
   if (!isRider && !isPassenger && req.user.role !== "admin") {
     throw createError(403, "Only ride owner or passenger can close the trip");
+  }
+
+  // Check if user account is active
+  const user = await User.findById(req.user.id);
+  if (!user || !user.isActive) {
+    throw createError(403, "Account deactivated. You cannot mark rides as completed.");
   }
 
   if (booking.status === "completed") {

@@ -4,6 +4,7 @@ const createError = require("http-errors");
 const Ride = require("../models/Ride");
 const Booking = require("../models/Booking");
 const Complaint = require("../models/Complaint");
+const User = require("../models/User");
 const asyncHandler = require("../utils/asyncHandler");
 const { calculateFare } = require("../utils/calculateFare");
 
@@ -17,6 +18,17 @@ exports.addRide = asyncHandler(async (req, res) => {
 
   if (!from || !to || !distance || !date || !time) {
     throw createError(400, "Missing required fields");
+  }
+
+  // Check if user account is active
+  const user = await User.findById(req.user.id);
+  if (!user || !user.isActive) {
+    throw createError(403, "Account deactivated. You cannot add rides.");
+  }
+
+  // Only riders and admins can add rides, customers cannot
+  if (user.role === "student") {
+    throw createError(403, "Customers cannot add rides. Only riders can add rides.");
   }
 
   const fare = calculateFare(distance);
@@ -47,9 +59,17 @@ exports.getRealTimeRides = asyncHandler(async (req, res) => {
   if (from) filters.from = new RegExp(from, "i");
   if (to) filters.to = new RegExp(to, "i");
 
-  const rides = await Ride.find(filters).populate("riderId", "name gender rating phone");
+  const rides = await Ride.find(filters).populate({
+    path: "riderId",
+    select: "name gender rating phone isActive",
+  });
 
+  // Filter out rides from deactivated riders
   const futureRides = rides.filter((ride) => {
+    // Only show rides from active riders
+    if (!ride.riderId || !ride.riderId.isActive) {
+      return false;
+    }
     const rideDate = buildRideDateTime(ride);
     const isFuture = rideDate.isValid() ? rideDate.isAfter(now) : true;
     const matchesDate = date ? ride.date === date : true;
@@ -91,6 +111,12 @@ exports.updateRide = asyncHandler(async (req, res) => {
     throw createError(403, "Not allowed to modify this ride");
   }
 
+  // Check if user account is active
+  const user = await User.findById(req.user.id);
+  if (!user || !user.isActive) {
+    throw createError(403, "Account deactivated. You cannot update rides.");
+  }
+
   const updates = req.body;
   if (updates.distance) {
     updates.fare = calculateFare(updates.distance);
@@ -108,6 +134,14 @@ exports.deleteRide = asyncHandler(async (req, res) => {
     throw createError(403, "Not allowed to delete this ride");
   }
 
+  // Check if user account is active (unless admin is deleting)
+  if (req.user.role !== "admin") {
+    const user = await User.findById(req.user.id);
+    if (!user || !user.isActive) {
+      throw createError(403, "Account deactivated. You cannot delete rides.");
+    }
+  }
+
   await Promise.all([
     ride.deleteOne(),
     Booking.deleteMany({ rideId: ride._id }),
@@ -118,6 +152,18 @@ exports.deleteRide = asyncHandler(async (req, res) => {
 
 exports.listAll = asyncHandler(async (req, res) => {
   const rides = await Ride.find().sort({ createdAt: -1 });
+  res.json({ success: true, data: rides });
+});
+
+exports.getAllRides = asyncHandler(async (req, res) => {
+  // Returns all rides (for riders to view all rides in system)
+  const rides = await Ride.find()
+    .populate({
+      path: "riderId",
+      select: "name gender rating phone isActive",
+    })
+    .sort({ createdAt: -1 });
+  
   res.json({ success: true, data: rides });
 });
 
