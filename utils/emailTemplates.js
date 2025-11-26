@@ -7,7 +7,7 @@ const verificationTemplate = (name, token) => ({
 Please verify your email to activate your ${appName} account.
 
 Verification code: ${token}
-
+Thank you!
 If you did not sign up, please ignore this email.`,
 });
 
